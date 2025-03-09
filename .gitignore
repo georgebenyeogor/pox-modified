@@ -16,7 +16,6 @@ old.*
 *.pcap
 \#*\#
 *~
-ext/*
 pox/lib/pxpcap/pxpcap_c/build
 pox/lib/pxpcap/pxpcap_c/WpdPack
 pox/lib/pxpcap/pxpcap.so
