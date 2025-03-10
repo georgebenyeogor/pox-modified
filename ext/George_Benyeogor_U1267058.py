@@ -30,22 +30,22 @@ class myApp (object):
         log.info("Switch %s connected", event.connection.dpid)
 
     def _handle_PacketIn(self, event):
-        log.debug("Received packet from %s", event.connection.dpid)
-        log.debug("Packet in port %s", event.port)
-        log.debug("Packet data %s", event.parsed)
+        log.info("Received packet from %s", event.connection.dpid)
+        log.info("Packet in port %s", event.port)
+        log.info("Packet data %s", event.parsed)
         packet = event.parsed
         if not packet.parsed:
             return
 
         # Check if ARP
         if packet.type == ethernet.ARP_TYPE:
-            log.debug("Received ARP packet")
+            log.info("Received ARP packet")
             self._handle_arp(event, packet)
             return
 
         # Check if IP (e.g., ICMP)
         if packet.type == ethernet.IP_TYPE:
-            log.debug("Received ICMP packet")
+            log.info("Received ICMP packet")
             self._handle_ip(event, packet)
             return
 
