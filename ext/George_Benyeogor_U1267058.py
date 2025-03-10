@@ -14,47 +14,41 @@ SERVER_IPS = [IPAddr("10.0.0.5"),
 SERVER_MACS = [EthAddr("00:00:00:00:00:05"),
                EthAddr("00:00:00:00:00:06")]  # Corresponding MACs
 
-class LoadBalancer (object):
+class myApp (object):
     """
     Implements a simple round-robin load balancer with ARP interception.
     """
+  
     def __init__(self):
-        # Keep track of which server is next (for round robin)
-        self.server_index = 0
-
-        # Listen for OpenFlow events
-        core.openflow.addListeners(self)
-        log.info("LoadBalancer initialized")
+      self.server_index = 0 # Start with the first server
+      core.openflow.addListeners(self)
 
     def _handle_ConnectionUp(self, event):
         """
-        Called when a switch connects to the controller.
+        This is called when a switch connects to the controller.
         """
-        log.info("Switch %s has connected", event.connection.dpid)
+        log.info("Switch %s connected", event.connection.dpid)
 
     def _handle_PacketIn(self, event):
-        """
-        Called when a packet arrives that the switch doesn't know how to handle.
-        """
         packet = event.parsed
-        inport = event.port
-        dpid = event.connection.dpid
+        if not packet.parsed:
+            return
 
-        # 1. Handle ARP packets
+        # Check if ARP
         if packet.type == ethernet.ARP_TYPE:
+            log.debug("Received ARP packet")
             self._handle_arp(event, packet)
             return
 
-        # 2. Handle IP packets (ICMP)
-        elif packet.type == ethernet.IP_TYPE:
+        # Check if IP (e.g., ICMP)
+        if packet.type == ethernet.IP_TYPE:
+            log.debug("Received ICMP packet")
             self._handle_ip(event, packet)
             return
 
-        log.debug("Ignoring non-ARP, non-IP packet")
-
     def _handle_arp(self, event, packet):
         """
-        Intercept ARP requests for the virtual IP and respond with
+        Handle ARP requests for the virtual IP and respond with
         the chosen server's MAC address. Also install flow rules.
         """
         arp_req = packet.find('arp')
@@ -128,8 +122,5 @@ class LoadBalancer (object):
         connection.send(fm2)
 
 def launch():
-    """
-    POX will automatically call this 'launch' function when you do:
-    python pox.py openflow.of_01 --port=6633 George_Benyeogor_U1267058
-    """
-    core.registerNew(LoadBalancer)
+
+    core.registerNew(myApp)
