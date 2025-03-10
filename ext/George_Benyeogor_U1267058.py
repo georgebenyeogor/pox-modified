@@ -30,6 +30,9 @@ class myApp (object):
         log.info("Switch %s connected", event.connection.dpid)
 
     def _handle_PacketIn(self, event):
+        log.debug("Received packet from %s", event.connection.dpid)
+        log.debug("Packet in port %s", event.port)
+        log.debug("Packet data %s", event.parsed)
         packet = event.parsed
         if not packet.parsed:
             return
