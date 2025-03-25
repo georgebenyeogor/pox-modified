@@ -23,6 +23,7 @@ class myApp (object):
       self.ip_to_port = {}
       self.ip_to_port[SERVER_IPS[0]] = 5  
       self.ip_to_port[SERVER_IPS[1]] = 6  
+      self.client_to_server = {}
       core.openflow.addListeners(self)
 
     def _handle_ConnectionUp(self, event):
@@ -85,9 +86,17 @@ class myApp (object):
         if arp_req.opcode == arp.REQUEST and arp_req.protodst == VIRTUAL_IP:
             log.info("ARP request for virtual IP %s", VIRTUAL_IP)
             # Select a server in round-robin fashion
-            server_ip = SERVER_IPS[self.server_index]
-            server_mac = SERVER_MACS[self.server_index]
-            self.server_index = (self.server_index + 1) % len(SERVER_IPS)
+            client_ip = arp_req.protosrc
+
+            if client_ip in self.client_to_server:
+                server_ip, server_mac = self.client_to_server[client_ip]
+                log.info("Client %s already mapped to server %s", client_ip, server_ip)
+            else:
+                server_ip = SERVER_IPS[self.server_index]
+                server_mac = SERVER_MACS[self.server_index]
+                self.client_to_server[client_ip] = (server_ip, server_mac)
+                self.server_index = (self.server_index + 1) % len(SERVER_IPS)
+                log.info("Assigned client %s to server %s", client_ip, server_ip)
 
             arp_reply = arp()
             arp_reply.opcode = arp.REPLY
