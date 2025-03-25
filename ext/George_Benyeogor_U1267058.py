@@ -43,11 +43,9 @@ class myApp (object):
         {arp.REQUEST:"request",arp.REPLY:"reply"}.get(a.opcode,
         'op:%i' % (a.opcode,)), str(a.protosrc), str(a.protodst))
 
-
         if not packet.parsed:
             return
         
-
         # Check if ARP
         if packet.type == ethernet.ARP_TYPE:
             log.info("Received ARP packet")
@@ -68,6 +66,8 @@ class myApp (object):
         arp_req = packet.find('arp')
         if not arp_req:
             return
+        else:
+            log.info("Received ARP request for %s", arp_req.protodst)
 
         # Check if ARP is a request for the VIRTUAL_IP
         if arp_req.opcode == arp.REQUEST and arp_req.protodst == VIRTUAL_IP:
