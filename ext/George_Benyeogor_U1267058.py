@@ -110,7 +110,7 @@ class myApp (object):
                 self._send_arp_reply(event, packet, arp_req, dst_mac, dpid)
         
 
-    def _send_arp_reply(self, packet, event, arp_req, mac, dpid):
+    def _send_arp_reply(self, event, packet, arp_req, mac, dpid):
         arp_reply = arp()
         arp_reply.opcode = arp.REPLY
         arp_reply.hwsrc = mac
