@@ -108,10 +108,8 @@ class myApp (object):
             arp_reply.hwlen = arp_req.hwlen
             arp_reply.protolen = arp_req.protolen
 
-            ether = ethernet()
-            ether.type = ethernet.ARP_TYPE
-            ether.src = server_mac
-            ether.dst = arp_req.hwsrc
+            ether = ethernet(type=packet.type, src=event.connection.eth_addr,
+                           dst=arp_req.hwsrc)
             ether.payload = arp_reply
 
             log.info("%s answering ARP for %s" % (dpid_to_str(dpid),
@@ -119,7 +117,7 @@ class myApp (object):
 
             msg = of.ofp_packet_out()
             msg.data = ether.pack()
-            msg.actions.append(of.ofp_action_output(port=event.port))
+            msg.actions.append(of.ofp_action_output(port=of.OFPP_IN_PORT))
             msg.in_port = event.port
             event.connection.send(msg)
 
