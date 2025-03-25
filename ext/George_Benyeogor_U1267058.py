@@ -107,6 +107,9 @@ class myApp (object):
         
 
     def _send_arp_reply(self, event, packet, arp_req, mac, dpid):
+        """
+        Send an ARP reply to the client with the given MAC address.
+        """
         arp_reply = arp()
         arp_reply.opcode = arp.REPLY
         arp_reply.hwsrc = mac
