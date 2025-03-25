@@ -101,7 +101,7 @@ class myApp (object):
             arp_reply.opcode = arp.REPLY
             arp_reply.hwsrc = server_mac
             arp_reply.hwdst = arp_req.hwsrc
-            arp_reply.protosrc = server_ip
+            arp_reply.protosrc = VIRTUAL_IP
             arp_reply.protodst = arp_req.protosrc
             arp_reply.hwtype = arp_req.hwtype
             arp_reply.prototype = arp_req.prototype
