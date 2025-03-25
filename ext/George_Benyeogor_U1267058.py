@@ -124,7 +124,7 @@ class myApp (object):
         """
         Handle IP packets if they somehow arrive here without flows.
         """
-        log.debug("Received IP packet %s", packet.find('ipv4'))
+        log.info("Received IP packet %s", packet.find('ipv4'))
 
 
     def _install_flow_rules(self, connection, inport, server_ip, server_mac, client_ip, client_mac):
@@ -148,7 +148,6 @@ class myApp (object):
         fm1.actions.append(of.ofp_action_nw_addr.set_dst(server_ip))
         fm1.actions.append(of.ofp_action_dl_addr.set_dst(server_mac))
         fm1.actions.append(of.ofp_action_output(port=server_port))
-
         connection.send(fm1)
 
         # ---- Flow 2: Server -> Client ----
@@ -158,11 +157,11 @@ class myApp (object):
         fm2.match.nw_src = server_ip
         fm2.match.nw_dst = client_ip
 
-        fm2.actions.append(of.ofp_action_nw_addr.set_src(VIRTUAL_IP))
+        fm2.actions.append(of.ofp_action_dl_addr.set_src(server_mac))  
         fm2.actions.append(of.ofp_action_dl_addr.set_dst(client_mac))
         fm2.actions.append(of.ofp_action_output(port=client_port))
-
         connection.send(fm2)
+
         log.info("Installed dynamic flow from %s (port %d) to %s (port %d)", client_ip, client_port, server_ip, server_port)
 
 
