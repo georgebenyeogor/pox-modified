@@ -39,7 +39,7 @@ class myApp (object):
         a = packet.find('arp')
         if not a: return
 
-        log.debug("%s ARP %s %s => %s", dpid_to_str(dpid),
+        log.info("%s ARP %s %s => %s", dpid_to_str(dpid),
         {arp.REQUEST:"request",arp.REPLY:"reply"}.get(a.opcode,
         'op:%i' % (a.opcode,)), str(a.protosrc), str(a.protodst))
 
