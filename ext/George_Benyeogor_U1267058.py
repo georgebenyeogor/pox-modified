@@ -20,8 +20,8 @@ class myApp (object):
         self.ip_to_port = {}
         self.ip_to_mac = {}
         self.client_to_server = {}
-        self.ip_to_port[SERVER_IPS[0]] = "s1-eth5"
-        self.ip_to_port[SERVER_IPS[1]] = "s1-eth6"
+        self.ip_to_port[SERVER_IPS[0]] = 5
+        self.ip_to_port[SERVER_IPS[1]] = 6
         core.openflow.addListeners(self)
 
 
