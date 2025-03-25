@@ -24,6 +24,7 @@ class myApp (object):
       self.ip_to_port[SERVER_IPS[0]] = 5  
       self.ip_to_port[SERVER_IPS[1]] = 6  
       self.client_to_server = {}
+      self.ip_to_mac = {}
       core.openflow.addListeners(self)
 
     def _handle_ConnectionUp(self, event):
@@ -78,6 +79,9 @@ class myApp (object):
         
         if arp_req and arp_req.protosrc not in self.ip_to_port:
             self.ip_to_port[arp_req.protosrc] = event.port
+
+        if arp_req and arp_req.protosrc not in self.ip_to_mac:
+            self.ip_to_mac[arp_req.protosrc] = arp_req.hwsrc
         
         if arp_req.opcode == arp.REQUEST:
             log.info("ARP Request who-has %s tell %s", arp_req.protodst, arp_req.protosrc)
@@ -96,34 +100,43 @@ class myApp (object):
                 self.client_to_server[client_ip] = (server_ip, server_mac)
                 self.server_index = (self.server_index + 1) % len(SERVER_IPS)
                 log.info("Assigned client %s to server %s", client_ip, server_ip)
-
-            arp_reply = arp()
-            arp_reply.opcode = arp.REPLY
-            arp_reply.hwsrc = server_mac
-            arp_reply.hwdst = arp_req.hwsrc
-            arp_reply.protosrc = VIRTUAL_IP
-            arp_reply.protodst = arp_req.protosrc
-            arp_reply.hwtype = arp_req.hwtype
-            arp_reply.prototype = arp_req.prototype
-            arp_reply.hwlen = arp_req.hwlen
-            arp_reply.protolen = arp_req.protolen
-
-            ether = ethernet(type=packet.type, src=event.connection.eth_addr,
-                           dst=arp_req.hwsrc)
-            ether.payload = arp_reply
-
-            log.info("%s answering ARP for %s" % (dpid_to_str(dpid),
-                        str(arp_reply.protosrc)))
-
-            msg = of.ofp_packet_out()
-            msg.data = ether.pack()
-            msg.actions.append(of.ofp_action_output(port=of.OFPP_IN_PORT))
-            msg.in_port = event.port
-            event.connection.send(msg)
-
-            log.info("ARP reply sent: %s is-at %s", VIRTUAL_IP, server_mac)
-
+            self._send_arp_reply(event, packet, arp_req, server_mac, dpid)
             self._install_flow_rules(event.connection, server_ip, server_mac, client_ip, arp_req.hwsrc)
+
+        elif arp_req.opcode == arp.REQUEST:
+            if arp_req.protodst in self.ip_to_mac:
+            # We know the MAC for this IP -- send ARP reply
+                dst_mac = self.ip_to_mac[arp_req.protodst]
+                self._send_arp_reply(event, packet, arp_req, dst_mac, dpid)
+        
+
+    def _send_arp_reply(self, packet, event, arp_req, mac, dpid):
+        arp_reply = arp()
+        arp_reply.opcode = arp.REPLY
+        arp_reply.hwsrc = mac
+        arp_reply.hwdst = arp_req.hwsrc
+        arp_reply.protosrc = arp_req.protodst
+        arp_reply.protodst = arp_req.protosrc
+        arp_reply.hwtype = arp_req.hwtype
+        arp_reply.prototype = arp_req.prototype
+        arp_reply.hwlen = arp_req.hwlen
+        arp_reply.protolen = arp_req.protolen
+
+        ether = ethernet(type=packet.type, src=event.connection.eth_addr,
+                        dst=arp_req.hwsrc)
+        ether.payload = arp_reply
+
+        log.info("%s answering ARP for %s" % (dpid_to_str(dpid),
+                    str(arp_reply.protosrc)))
+
+        msg = of.ofp_packet_out()
+        msg.data = ether.pack()
+        msg.actions.append(of.ofp_action_output(port=of.OFPP_IN_PORT))
+        msg.in_port = event.port
+        event.connection.send(msg)
+
+        log.info("ARP reply sent: %s is-at %s", arp_req.protodst, mac)
+
 
 
     def _handle_ip(self, packet):
