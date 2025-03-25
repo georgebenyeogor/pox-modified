@@ -216,11 +216,11 @@ class myApp (object):
         fm2.actions.append(of.ofp_action_dl_addr.set_src(server_mac))   
         fm2.actions.append(of.ofp_action_dl_addr.set_dst(client_mac))
 
-        fm1.actions.append(of.ofp_action_output(port=server_port))
+        fm1.actions.append(of.ofp_action_output(port=5))
         connection.send(fm1)
         log.info("Installed flow (client->server): %s -> %s", client_ip, server_ip)
         
-        fm2.actions.append(of.ofp_action_output(port=client_port))
+        fm2.actions.append(of.ofp_action_output(port=1))
         connection.send(fm2)
         log.info("Installed flow (server->client): %s -> %s", server_ip, client_ip)
 
