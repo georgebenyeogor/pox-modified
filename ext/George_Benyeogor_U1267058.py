@@ -161,11 +161,11 @@ class myApp (object):
 
         # ---- Flow 2: Server -> Client ----
         fm2 = of.ofp_flow_mod()
-        fm2.match.in_port = server_port
         fm2.match.dl_type = 0x0800
         fm2.match.nw_src = server_ip
         fm2.match.nw_dst = client_ip
 
+        fm2.actions.append(of.ofp_action_nw_addr.set_src(VIRTUAL_IP))
         fm2.actions.append(of.ofp_action_dl_addr.set_src(server_mac))  
         fm2.actions.append(of.ofp_action_dl_addr.set_dst(client_mac))
         fm2.actions.append(of.ofp_action_output(port=client_port))
