@@ -202,7 +202,9 @@ class myApp (object):
         fm1.match.in_port = client_port
         fm1.match.dl_type = 0x0800
         fm1.match.nw_dst = VIRTUAL_IP
-        fm1.actions.append(of.ofp_action_nw_addr.set_dst(server_ip)) 
+        fm1.actions.append(of.ofp_action_nw_addr.set_dst(server_ip))
+        fm1.actions.append(of.ofp_action_dl_addr.set_dst(server_mac))  
+ 
 
         # Flow 2: server->client
         fm2 = of.ofp_flow_mod()
@@ -211,6 +213,8 @@ class myApp (object):
         fm2.match.nw_dst = client_ip
         fm2.match.in_port = server_port
         fm2.actions.append(of.ofp_action_nw_addr.set_src(VIRTUAL_IP))
+        fm2.actions.append(of.ofp_action_dl_addr.set_src(server_mac))   
+        fm2.actions.append(of.ofp_action_dl_addr.set_dst(client_mac))
 
         fm1.actions.append(of.ofp_action_output(port=server_port))
         connection.send(fm1)
