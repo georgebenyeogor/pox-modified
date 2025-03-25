@@ -20,6 +20,9 @@ class myApp (object):
 
     def __init__(self):
       self.server_index = 0 # Start with the first server
+      self.ip_to_port = {}
+      self.ip_to_port[SERVER_IPS[0]] = 5  
+      self.ip_to_port[SERVER_IPS[1]] = 6  
       core.openflow.addListeners(self)
 
     def _handle_ConnectionUp(self, event):
@@ -64,11 +67,10 @@ class myApp (object):
 
     def _handle_arp(self, event, packet):
         """
-        Handle ARP requests for the virtual IP and respond with
-        the chosen server's MAC address. Also install flow rules.
+        Handle ARP requests for the virtual IP and reply with
+        the chosen server's MAC address. Then install flow rules.
         """
         dpid = event.connection.dpid
-        inport = event.port
         arp_req = packet.find('arp')
         if not arp_req:
             return
@@ -128,22 +130,39 @@ class myApp (object):
         1) Client -> Server:  Match on client -> Virtual IP, rewrite to server IP, server MAC
         2) Server -> Client:  Match on server IP -> client IP, rewrite source IP to Virtual IP
         """
-        # Flow 1: Client to Server
+        client_port = self.ip_to_port.get(client_ip)
+        server_port = self.ip_to_port.get(server_ip)
+
+        log.info("Installing flow rules for client %s (port %d) to server %s (port %d)",
+                 client_ip, inport, server_ip, server_port)
+        
+        # ---- Flow 1: Client -> Server ----
         fm1 = of.ofp_flow_mod()
-        fm1.match.in_port = inport
-        fm1.match.dl_type = 0x0800          # IP type
-        fm1.match.nw_dst = VIRTUAL_IP       # Dest is the virtual IP
+        fm1.match.in_port = client_port
+        fm1.match.dl_type = 0x0800
+        fm1.match.nw_dst = VIRTUAL_IP
+
         fm1.actions.append(of.ofp_action_nw_addr.set_dst(server_ip))
         fm1.actions.append(of.ofp_action_dl_addr.set_dst(server_mac))
+        fm1.actions.append(of.ofp_action_output(port=server_port))
+
         connection.send(fm1)
 
-        # Flow 2: Server to Client
+        # ---- Flow 2: Server -> Client ----
         fm2 = of.ofp_flow_mod()
+        fm2.match.in_port = server_port
         fm2.match.dl_type = 0x0800
         fm2.match.nw_src = server_ip
         fm2.match.nw_dst = client_ip
+
         fm2.actions.append(of.ofp_action_nw_addr.set_src(VIRTUAL_IP))
+        fm2.actions.append(of.ofp_action_dl_addr.set_dst(client_mac))
+        fm2.actions.append(of.ofp_action_output(port=client_port))
+
         connection.send(fm2)
+        log.info("Installed dynamic flow from %s (port %d) to %s (port %d)", client_ip, client_port, server_ip, server_port)
+
+
 
 def launch():
     core.registerNew(myApp)
