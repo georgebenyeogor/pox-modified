@@ -66,8 +66,9 @@ class myApp (object):
         arp_req = packet.find('arp')
         if not arp_req:
             return
-        else:
-            log.info("Received ARP request for %s", arp_req.protodst)
+        
+        if arp_req.opcode == arp.REQUEST:
+            log.info("ARP Request who-has %s tell", arp_req.protodst, arp_req.protosrc)
 
         # Check if ARP is a request for the VIRTUAL_IP
         if arp_req.opcode == arp.REQUEST and arp_req.protodst == VIRTUAL_IP:
