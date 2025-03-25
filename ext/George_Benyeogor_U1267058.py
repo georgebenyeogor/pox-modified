@@ -3,7 +3,6 @@ import pox.openflow.libopenflow_01 as of
 from pox.lib.packet.arp import arp
 from pox.lib.packet.ethernet import ethernet
 from pox.lib.addresses import IPAddr, EthAddr
-import pox.lib.packet as pkt
 from pox.lib.util import dpid_to_str
 
 
@@ -27,6 +26,7 @@ class myApp (object):
       self.ip_to_mac = {}
       core.openflow.addListeners(self)
 
+
     def _handle_ConnectionUp(self, event):
         """
         Called when a switch connects to the controller.
@@ -37,6 +37,7 @@ class myApp (object):
         fm.actions.append(of.ofp_action_output(port=of.OFPP_CONTROLLER))
         event.connection.send(fm)
         log.info("Switch %s connected", event.connection.dpid)
+
 
     def _handle_PacketIn(self, event):
         dpid = event.connection.dpid
@@ -61,11 +62,6 @@ class myApp (object):
             self._handle_arp(event, packet)
             return
 
-        # Check if IP (ICMP)
-        if packet.type == ethernet.IP_TYPE:
-            log.info("Received ICMP packet")
-            self._handle_ip(event, packet)
-            return
 
     def _handle_arp(self, event, packet):
         """
@@ -100,8 +96,8 @@ class myApp (object):
                 self.client_to_server[client_ip] = (server_ip, server_mac)
                 self.server_index = (self.server_index + 1) % len(SERVER_IPS)
                 log.info("Assigned client %s to server %s", client_ip, server_ip)
-            self._send_arp_reply(event, packet, arp_req, server_mac, dpid)
             self._install_flow_rules(event.connection, server_ip, server_mac, client_ip, arp_req.hwsrc)
+            self._send_arp_reply(event, packet, arp_req, server_mac, dpid)
 
         elif arp_req.opcode == arp.REQUEST:
             if arp_req.protodst in self.ip_to_mac:
@@ -138,14 +134,6 @@ class myApp (object):
         log.info("ARP reply sent: %s is-at %s", arp_req.protodst, mac)
 
 
-
-    def _handle_ip(self, packet):
-        """
-        Handle IP packets if they somehow arrive here without flows.
-        """
-        log.info("Received IP packet %s", packet.find('ipv4'))
-
-
     def _install_flow_rules(self, connection, server_ip, server_mac, client_ip, client_mac):
         """
         Install two flow rules:
@@ -167,7 +155,6 @@ class myApp (object):
         fm1.actions.append(of.ofp_action_nw_addr.set_dst(server_ip))
         fm1.actions.append(of.ofp_action_dl_addr.set_dst(server_mac))  
  
-
         # Flow 2: server->client
         fm2 = of.ofp_flow_mod()
         fm2.match.dl_type = 0x0800
