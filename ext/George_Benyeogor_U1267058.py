@@ -35,7 +35,6 @@ class myApp (object):
 
     def _handle_PacketIn(self, event):
         dpid = event.connection.dpid
-        inport = event.port
         packet = event.parsed
         if not packet.parsed:
             log.warning("%s: ignoring unparsed packet", dpid_to_str(dpid))
@@ -68,6 +67,8 @@ class myApp (object):
         Handle ARP requests for the virtual IP and respond with
         the chosen server's MAC address. Also install flow rules.
         """
+        dpid = event.connection.dpid
+        inport = event.port
         arp_req = packet.find('arp')
         if not arp_req:
             return
@@ -85,22 +86,29 @@ class myApp (object):
 
             # Craft an ARP reply
             arp_reply = arp()
+            arp_reply.hwtype = arp_req.hwtype
+            arp_reply.prototype = arp_req.prototype
+            arp_reply.hwlen = arp_req.hwlen
+            arp_reply.protolen = arp_req.protolen
             arp_reply.opcode = arp.REPLY
-            arp_reply.hwsrc = server_mac       
             arp_reply.hwdst = arp_req.hwsrc
-            arp_reply.protosrc = VIRTUAL_IP
             arp_reply.protodst = arp_req.protosrc
+            arp_reply.protosrc = arp_req.protodst
+            arp_reply.hwsrc = server_mac
 
-            ether = ethernet()
-            ether.type = ethernet.ARP_TYPE
-            ether.src = server_mac
-            ether.dst = arp_req.hwsrc
-            ether.set_payload(arp_reply)
 
+            ether = ethernet(type=packet.type, src=event.connection.eth_addr,
+                           dst=arp_req.hwsrc)
+            ether.payload = arp_reply
+
+            log.info("%s answering ARP for %s" % (dpid_to_str(dpid),
+                str(arp_reply.protosrc)))
+            
             # Send ARP reply out the same port the request came in
             msg = of.ofp_packet_out()
             msg.data = ether.pack()
-            msg.actions.append(of.ofp_action_output(port = event.port))
+            msg.actions.append(of.ofp_action_output(port = of.OFPP_IN_PORT))
+            msg.in_port = inport
             event.connection.send(msg)
 
             self._install_flow_rules(event.connection, event.port, server_ip, server_mac, arp_req.protosrc, arp_req.hwsrc)
