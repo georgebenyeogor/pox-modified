@@ -193,12 +193,9 @@ class myApp (object):
         client_port = self.ip_to_port.get(client_ip)
         server_port = self.ip_to_port.get(server_ip)
 
-        if client_port is None or server_port is None:
+        if not client_port or not server_port:
             log.warning("Port unknown for client %s or server %s", client_ip, server_ip)
             return
-
-        log.info("Installing flow rules for client %s (port %s) to server %s (port %s)",
-                 client_ip, client_port, server_ip, server_port)
 
         # ---- Flow 1: Client -> Server ----
         fm1 = of.ofp_flow_mod()
@@ -210,22 +207,23 @@ class myApp (object):
         fm1.actions.append(of.ofp_action_dl_addr.set_dst(server_mac))
         fm1.actions.append(of.ofp_action_output(port=server_port))
         connection.send(fm1)
+        log.info("Installed flow (client->server): %s (port %d) -> %s (port %d)",
+             client_ip, client_port, server_ip, server_port)
 
         # ---- Flow 2: Server -> Client ----
         fm2 = of.ofp_flow_mod()
+        fm2.match.in_port = server_port
         fm2.match.dl_type = 0x0800
         fm2.match.nw_src = server_ip
         fm2.match.nw_dst = client_ip
 
-        # NAT the source IP to the virtual IP
         fm2.actions.append(of.ofp_action_nw_addr.set_src(VIRTUAL_IP))
         fm2.actions.append(of.ofp_action_dl_addr.set_src(server_mac))
         fm2.actions.append(of.ofp_action_dl_addr.set_dst(client_mac))
         fm2.actions.append(of.ofp_action_output(port=client_port))
         connection.send(fm2)
-
-        log.info("Installed flow from %s (port %s) to %s (port %s)",
-                 client_ip, client_port, server_ip, server_port)
+        log.info("Installed flow (server->client): %s (port %d) -> %s (port %d)",
+             server_ip, server_port, client_ip, client_port)
 
 
 def launch():
