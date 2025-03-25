@@ -68,7 +68,8 @@ class myApp (object):
             return
         
         if arp_req.opcode == arp.REQUEST:
-            log.info("ARP Request who-has %s tell", arp_req.protodst, arp_req.protosrc)
+            log.info("ARP Request who-has %s tell %s", arp_req.protodst, arp_req.protosrc)
+
 
         # Check if ARP is a request for the VIRTUAL_IP
         if arp_req.opcode == arp.REQUEST and arp_req.protodst == VIRTUAL_IP:
