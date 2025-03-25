@@ -33,9 +33,12 @@ class myApp (object):
         log.info("Received packet from %s", event.connection.dpid)
         log.info("Packet in port %s", event.port)
         log.info("Packet data %s", event.parsed)
+        log.info("Packet type %s", packet.type)
+
         packet = event.parsed
         if not packet.parsed:
             return
+        
 
         # Check if ARP
         if packet.type == ethernet.ARP_TYPE:
