@@ -75,6 +75,9 @@ class myApp (object):
         if not arp_req:
             return
         
+        if arp_req and arp_req.protosrc not in self.ip_to_port:
+            self.ip_to_port[arp_req.protosrc] = event.port
+        
         if arp_req.opcode == arp.REQUEST:
             log.info("ARP Request who-has %s tell %s", arp_req.protodst, arp_req.protosrc)
 
