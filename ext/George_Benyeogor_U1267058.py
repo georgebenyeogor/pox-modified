@@ -27,7 +27,7 @@ class myApp (object):
         Called when a switch connects to the controller.
         """
         fm = of.ofp_flow_mod()
-        fm.priority -= 0x1000 # lower than the default
+        fm.priority = 1 # lower than the default
         fm.match.dl_type = ethernet.ARP_TYPE
         fm.actions.append(of.ofp_action_output(port=of.OFPP_CONTROLLER))
         event.connection.send(fm)
@@ -94,7 +94,7 @@ class myApp (object):
             ether = ethernet()
             ether.type = ethernet.ARP_TYPE
             ether.src = server_mac
-            ether.dst = packet.src
+            ether.dst = arp_req.hwsrc
             ether.set_payload(arp_reply)
 
             # Send ARP reply out the same port the request came in
