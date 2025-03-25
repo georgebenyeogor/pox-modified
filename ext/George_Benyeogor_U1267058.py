@@ -18,13 +18,10 @@ class myApp (object):
     def __init__(self):
         self.server_index = 0  # Start with the first server
         self.ip_to_port = {}
-        self.ip_to_mac = {}    
+        self.ip_to_mac = {}
         self.client_to_server = {}
-
-        # Preload server IP -> port if needed
         self.ip_to_port[SERVER_IPS[0]] = 5
         self.ip_to_port[SERVER_IPS[1]] = 6
-
         core.openflow.addListeners(self)
 
 
@@ -38,7 +35,6 @@ class myApp (object):
         fm.match.dl_type = ethernet.ARP_TYPE
         fm.actions.append(of.ofp_action_output(port=of.OFPP_CONTROLLER))
         event.connection.send(fm)
-
         log.info("Switch %s connected", event.connection.dpid)
 
 
@@ -46,7 +42,6 @@ class myApp (object):
         dpid = event.connection.dpid
         packet = event.parsed
         if not packet.parsed:
-            log.warning("%s: ignoring unparsed packet", dpid_to_str(dpid))
             return
 
         # If it's ARP
@@ -55,10 +50,10 @@ class myApp (object):
             self._handle_arp(event, packet)
             return
 
-        # If it's IP (e.g., ICMP)
+        # If it's IP (ICMP)
         if packet.type == ethernet.IP_TYPE:
-            log.info("Received IP (likely ICMP) packet on switch %s", dpid_to_str(dpid))
-            self._handle_ip(event, packet)
+            log.info("Received IP (ICMP) packet on switch %s", dpid_to_str(dpid))
+            self._handle_ip(packet)
             return
 
 
@@ -100,12 +95,11 @@ class myApp (object):
         Load balancer logic for ARP requests to VIRTUAL_IP
         """
         client_ip = arp_req.protosrc
-        dpid = event.connection.dpid
         inport = event.port
 
         log.info("ARP request for VIRTUAL IP %s from client %s", VIRTUAL_IP, client_ip)
 
-        # 1. Check if we already mapped client -> server
+        # Check if we already mapped client -> server
         if client_ip in self.client_to_server:
             server_ip, server_mac = self.client_to_server[client_ip]
             log.info("Client %s already mapped to server %s", client_ip, server_ip)
@@ -117,37 +111,38 @@ class myApp (object):
             self.server_index = (self.server_index + 1) % len(SERVER_IPS)
             log.info("Assigned client %s to server %s", client_ip, server_ip)
 
-            arp_reply = arp()
-            arp_reply.opcode = arp.REPLY
-            arp_reply.hwsrc = server_mac
-            arp_reply.hwdst = arp_req.hwsrc
-            arp_reply.protosrc = VIRTUAL_IP
-            arp_reply.protodst = arp_req.protosrc
-            arp_reply.hwtype = arp_req.hwtype
-            arp_reply.prototype = arp_req.prototype
-            arp_reply.hwlen = arp_req.hwlen
-            arp_reply.protolen = arp_req.protolen
+        # Send ARP reply to the client
+        arp_reply = arp()
+        arp_reply.opcode = arp.REPLY
+        arp_reply.hwsrc = server_mac
+        arp_reply.hwdst = arp_req.hwsrc
+        arp_reply.protosrc = VIRTUAL_IP
+        arp_reply.protodst = arp_req.protosrc
+        arp_reply.hwtype = arp_req.hwtype
+        arp_reply.prototype = arp_req.prototype
+        arp_reply.hwlen = arp_req.hwlen
+        arp_reply.protolen = arp_req.protolen
 
-            ether = ethernet()
-            ether.type = ethernet.ARP_TYPE
-            ether.src = server_mac
-            ether.dst = arp_req.hwsrc
-            ether.payload = arp_reply
+        ether = ethernet()
+        ether.type = ethernet.ARP_TYPE
+        ether.src = server_mac
+        ether.dst = arp_req.hwsrc
+        ether.payload = arp_reply
 
-            msg = of.ofp_packet_out()
-            msg.data = ether.pack()
-            msg.actions.append(of.ofp_action_output(port=inport))
-            msg.in_port = inport
-            event.connection.send(msg)
+        msg = of.ofp_packet_out()
+        msg.data = ether.pack()
+        msg.actions.append(of.ofp_action_output(port=inport))
+        msg.in_port = inport
+        event.connection.send(msg)
 
-            log.info("LB ARP reply: %s is-at %s -> sent to %s", VIRTUAL_IP, server_mac, arp_req.protosrc)
+        log.info("LB ARP reply: %s is-at %s -> sent to %s", VIRTUAL_IP, server_mac, arp_req.protosrc)
 
-            # 3. Install flow rules for client<->server
-            self._install_flow_rules(event.connection, server_ip, server_mac,
-                                    client_ip, arp_req.hwsrc)
+        client_mac = arp_req.hwsrc
+        self._install_flow_rules(event.connection, server_ip, server_mac,
+                                 client_ip, client_mac)
 
 
-    def _send_arp_reply(self, event,  arp_req, dst_mac):
+    def _send_arp_reply(self, event, arp_req, dst_mac):
         """
         Send a normal ARP REPLY: "arp_req.protodst is at dst_mac"
         to the requester (arp_req.protosrc).
@@ -161,8 +156,8 @@ class myApp (object):
         arp_reply.opcode = arp.REPLY
         arp_reply.hwsrc = dst_mac
         arp_reply.hwdst = arp_req.hwsrc
-        arp_reply.protosrc = arp_req.protodst 
-        arp_reply.protodst = arp_req.protosrc 
+        arp_reply.protosrc = arp_req.protodst
+        arp_reply.protodst = arp_req.protosrc
         arp_reply.hwtype = arp_req.hwtype
         arp_reply.prototype = arp_req.prototype
         arp_reply.hwlen = arp_req.hwlen
@@ -185,7 +180,8 @@ class myApp (object):
         """
         Handle IP packets if they somehow arrive without flows.
         """
-        log.info("Received IP packet %s", packet.find('ipv4'))
+        ipv4_pkt = packet.find('ipv4')
+        log.info("Received IP packet from %s to %s", ipv4_pkt.srcip, ipv4_pkt.dstip)
 
 
     def _install_flow_rules(self, connection, server_ip, server_mac, client_ip, client_mac):
@@ -196,6 +192,10 @@ class myApp (object):
         """
         client_port = self.ip_to_port.get(client_ip)
         server_port = self.ip_to_port.get(server_ip)
+
+        if client_port is None or server_port is None:
+            log.warning("Port unknown for client %s or server %s", client_ip, server_ip)
+            return
 
         log.info("Installing flow rules for client %s (port %s) to server %s (port %s)",
                  client_ip, client_port, server_ip, server_port)
@@ -217,6 +217,7 @@ class myApp (object):
         fm2.match.nw_src = server_ip
         fm2.match.nw_dst = client_ip
 
+        # NAT the source IP to the virtual IP
         fm2.actions.append(of.ofp_action_nw_addr.set_src(VIRTUAL_IP))
         fm2.actions.append(of.ofp_action_dl_addr.set_src(server_mac))
         fm2.actions.append(of.ofp_action_dl_addr.set_dst(client_mac))
