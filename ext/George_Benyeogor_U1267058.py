@@ -4,6 +4,8 @@ from pox.lib.packet.arp import arp
 from pox.lib.packet.ethernet import ethernet
 from pox.lib.addresses import IPAddr, EthAddr
 import pox.lib.packet as pkt
+from pox.lib.util import dpid_to_str
+
 
 log = core.getLogger()
 
@@ -27,12 +29,21 @@ class myApp (object):
         log.info("Switch %s connected", event.connection.dpid)
 
     def _handle_PacketIn(self, event):
-        log.info("Received packet from %s", event.connection.dpid)
-        log.info("Packet in port %s", event.port)
-        log.info("Packet data %s", event.parsed)
-        log.info("Packet type %s", event.parsed.type)
-
+        dpid = event.connection.dpid
+        inport = event.port
         packet = event.parsed
+        if not packet.parsed:
+            log.warning("%s: ignoring unparsed packet", dpid_to_str(dpid))
+            return
+
+        a = packet.find('arp')
+        if not a: return
+
+        log.debug("%s ARP %s %s => %s", dpid_to_str(dpid),
+        {arp.REQUEST:"request",arp.REPLY:"reply"}.get(a.opcode,
+        'op:%i' % (a.opcode,)), str(a.protosrc), str(a.protodst))
+
+
         if not packet.parsed:
             return
         
