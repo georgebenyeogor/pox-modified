@@ -20,8 +20,8 @@ class myApp (object):
         self.ip_to_port = {}
         self.ip_to_mac = {}
         self.client_to_server = {}
-        self.ip_to_port[SERVER_IPS[0]] = 5
-        self.ip_to_port[SERVER_IPS[1]] = 6
+        self.ip_to_port[SERVER_IPS[0]] = "s1-eth5"
+        self.ip_to_port[SERVER_IPS[1]] = "s1-eth6"
         core.openflow.addListeners(self)
 
 
@@ -207,23 +207,23 @@ class myApp (object):
         fm1.actions.append(of.ofp_action_dl_addr.set_dst(server_mac))
         fm1.actions.append(of.ofp_action_output(port=server_port))
         connection.send(fm1)
-        log.info("Installed flow (client->server): %s (port %d) -> %s (port %d)",
-             client_ip, client_port, server_ip, server_port)
 
-        # ---- Flow 2: Server -> Client ----
+        log.info("Installed flow (client->server): %s -> %s", client_ip, server_ip)
+
+        # Flow 2: server->client
         fm2 = of.ofp_flow_mod()
-        fm2.match.in_port = server_port
         fm2.match.dl_type = 0x0800
         fm2.match.nw_src = server_ip
         fm2.match.nw_dst = client_ip
+        fm2.match.in_port = server_port
 
         fm2.actions.append(of.ofp_action_nw_addr.set_src(VIRTUAL_IP))
         fm2.actions.append(of.ofp_action_dl_addr.set_src(server_mac))
         fm2.actions.append(of.ofp_action_dl_addr.set_dst(client_mac))
         fm2.actions.append(of.ofp_action_output(port=client_port))
         connection.send(fm2)
-        log.info("Installed flow (server->client): %s (port %d) -> %s (port %d)",
-             server_ip, server_port, client_ip, client_port)
+
+        log.info("Installed flow (server->client): %s -> %s", server_ip, client_ip)
 
 
 def launch():
