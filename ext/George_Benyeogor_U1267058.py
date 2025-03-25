@@ -204,7 +204,6 @@ class myApp (object):
         fm1.match.nw_dst = VIRTUAL_IP
 
         fm1.actions.append(of.ofp_action_nw_addr.set_dst(server_ip))
-        fm1.actions.append(of.ofp_action_dl_addr.set_dst(server_mac))
         fm1.actions.append(of.ofp_action_output(port=server_port))
         connection.send(fm1)
 
@@ -218,8 +217,6 @@ class myApp (object):
         fm2.match.in_port = server_port
 
         fm2.actions.append(of.ofp_action_nw_addr.set_src(VIRTUAL_IP))
-        fm2.actions.append(of.ofp_action_dl_addr.set_src(server_mac))
-        fm2.actions.append(of.ofp_action_dl_addr.set_dst(client_mac))
         fm2.actions.append(of.ofp_action_output(port=client_port))
         connection.send(fm2)
 
