@@ -70,9 +70,9 @@ class myApp (object):
         if arp_req.opcode == arp.REQUEST:
             log.info("ARP Request who-has %s tell %s", arp_req.protodst, arp_req.protosrc)
 
-
         # Check if ARP is a request for the VIRTUAL_IP
         if arp_req.opcode == arp.REQUEST and arp_req.protodst == VIRTUAL_IP:
+            log.info("ARP request for virtual IP %s", VIRTUAL_IP)
             # Select a server in round-robin fashion
             server_ip = SERVER_IPS[self.server_index]
             server_mac = SERVER_MACS[self.server_index]
