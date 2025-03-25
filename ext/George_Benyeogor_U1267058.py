@@ -7,70 +7,50 @@ import pox.lib.packet as pkt
 
 log = core.getLogger()
 
+VIRTUAL_IP = IPAddr("10.0.0.10")  # The virtual IP clients will ping
+SERVER_IPS = [IPAddr("10.0.0.5"), IPAddr("10.0.0.6")]  # Real servers
+SERVER_MACS = [EthAddr("00:00:00:00:00:05"), EthAddr("00:00:00:00:00:06")]
 
-VIRTUAL_IP = IPAddr("10.0.0.10")        # The "virtual" IP clients will ping
-SERVER_IPS = [IPAddr("10.0.0.5"),
-              IPAddr("10.0.0.6")]      # Real server IPs
-SERVER_MACS = [EthAddr("00:00:00:00:00:05"),
-               EthAddr("00:00:00:00:00:06")]  # Corresponding MACs
-
-class myApp (object):
-    """
-    Implements a simple round-robin load balancer with ARP interception.
-    """
-  
+class myApp(object):
     def __init__(self):
-      self.server_index = 0 # Start with the first server
-      core.openflow.addListeners(self)
+        self.server_index = 0
+        self.mac_to_port = {}  # Track MAC addresses to switch ports
+        core.openflow.addListeners(self)
 
     def _handle_ConnectionUp(self, event):
-        """
-        This is called when a switch connects to the controller.
-        """
         log.info("Switch %s connected", event.connection.dpid)
 
     def _handle_PacketIn(self, event):
-        log.info("Received packet from %s", event.connection.dpid)
-        log.info("Packet in port %s", event.port)
-        log.info("Packet data %s", event.parsed)
         packet = event.parsed
         if not packet.parsed:
             return
 
-        # Check if ARP
+        # Learn the port for this MAC
+        self.mac_to_port[packet.src] = event.port
+
         if packet.type == ethernet.ARP_TYPE:
-            log.info("Received ARP packet")
             self._handle_arp(event, packet)
             return
 
-        # Check if IP (e.g., ICMP)
         if packet.type == ethernet.IP_TYPE:
-            log.info("Received ICMP packet")
             self._handle_ip(event, packet)
             return
 
     def _handle_arp(self, event, packet):
-        """
-        Handle ARP requests for the virtual IP and respond with
-        the chosen server's MAC address. Also install flow rules.
-        """
         arp_req = packet.find('arp')
         if not arp_req:
             return
 
-        # Check if ARP is a request for the VIRTUAL_IP
         if arp_req.opcode == arp.REQUEST and arp_req.protodst == VIRTUAL_IP:
-            # 1. Select a server in round-robin fashion
+            # Select server via round robin
             server_ip = SERVER_IPS[self.server_index]
             server_mac = SERVER_MACS[self.server_index]
-
-            # 2. Bump the index for the next request
             self.server_index = (self.server_index + 1) % len(SERVER_IPS)
 
-            # 3. Craft an ARP reply
+            # Build ARP reply
             arp_reply = arp()
             arp_reply.opcode = arp.REPLY
-            arp_reply.hwsrc = server_mac       
+            arp_reply.hwsrc = server_mac
             arp_reply.hwdst = arp_req.hwsrc
             arp_reply.protosrc = VIRTUAL_IP
             arp_reply.protodst = arp_req.protosrc
@@ -81,49 +61,55 @@ class myApp (object):
             ether.dst = packet.src
             ether.set_payload(arp_reply)
 
-            # 4. Send ARP reply out the same port the request came in
             msg = of.ofp_packet_out()
             msg.data = ether.pack()
-            msg.actions.append(of.ofp_action_output(port = event.port))
+            msg.actions.append(of.ofp_action_output(port=event.port))
             event.connection.send(msg)
 
-            self._install_flow_rules(event.connection, event.port, server_ip, server_mac, arp_req.protosrc, arp_req.hwsrc)
+            # Install bidirectional flow rules
+            self._install_flow_rules(event.connection, event.port,
+                                     server_ip, server_mac,
+                                     arp_req.protosrc, arp_req.hwsrc)
 
     def _handle_ip(self, event, packet):
-        """
-        Handle IP packets if they somehow arrive here without flows.
-        Typically, if you set up flows properly on ARP, this might not be used as much.
-        """
-        log.debug("Received IP packet %s", packet.find('ipv4'))
+        log.debug("Received unmatched IP packet: %s", packet.find('ipv4'))
 
-    def _install_flow_rules(self, connection, inport, server_ip, server_mac, client_ip, client_mac):
-        """
-        Install two flow rules:
-        1) Client -> Server:  Match on client -> Virtual IP, rewrite to server IP, server MAC
-        2) Server -> Client:  Match on server IP -> client IP, rewrite source IP to Virtual IP
-        """
-        # Flow 1: Client to Server
+    def _install_flow_rules(self, connection, client_port, server_ip, server_mac, client_ip, client_mac):
+        # Look up ports
+        server_port = self.mac_to_port.get(server_mac)
+        client_port_confirmed = self.mac_to_port.get(client_mac)
+
+        if server_port is None or client_port_confirmed is None:
+            log.warning("Unknown ports for client/server, skipping rule install")
+            return
+
+        # Client -> Server rule
         fm1 = of.ofp_flow_mod()
-        fm1.match.in_port = inport
-        fm1.match.dl_type = 0x0800          # IP type
-        fm1.match.nw_dst = VIRTUAL_IP       # Dest is the virtual IP
-
+        fm1.match.in_port = client_port
+        fm1.match.dl_type = 0x0800  # IP
+        fm1.match.nw_proto = pkt.ipv4.ICMP_PROTOCOL  # ICMP only
+        fm1.match.nw_dst = VIRTUAL_IP
         fm1.actions.append(of.ofp_action_nw_addr.set_dst(server_ip))
         fm1.actions.append(of.ofp_action_dl_addr.set_dst(server_mac))
-        
+        fm1.actions.append(of.ofp_action_output(port=server_port))
+        fm1.idle_timeout = 30
+        fm1.hard_timeout = 60
         connection.send(fm1)
 
-        # Flow 2: Server to Client
+        # Server -> Client rule
         fm2 = of.ofp_flow_mod()
-
-        fm2.match.dl_type = 0x0800
+        fm2.match.in_port = server_port
+        fm2.match.dl_type = 0x0800  # IP
+        fm2.match.nw_proto = pkt.ipv4.ICMP_PROTOCOL
         fm2.match.nw_src = server_ip
         fm2.match.nw_dst = client_ip
-
         fm2.actions.append(of.ofp_action_nw_addr.set_src(VIRTUAL_IP))
-
+        fm2.actions.append(of.ofp_action_output(port=client_port_confirmed))
+        fm2.idle_timeout = 30
+        fm2.hard_timeout = 60
         connection.send(fm2)
 
-def launch():
+        log.info("Installed flow from client %s <-> server %s", client_ip, server_ip)
 
+def launch():
     core.registerNew(myApp)
