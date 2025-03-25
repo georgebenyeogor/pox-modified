@@ -87,7 +87,6 @@ class myApp (object):
             log.info("ARP request for virtual IP %s", VIRTUAL_IP)
             # Select a server in round-robin fashion
             client_ip = arp_req.protosrc
-
             if client_ip in self.client_to_server:
                 server_ip, server_mac = self.client_to_server[client_ip]
                 log.info("Client %s already mapped to server %s", client_ip, server_ip)
@@ -126,7 +125,7 @@ class myApp (object):
 
             log.info("ARP reply sent: %s is-at %s", VIRTUAL_IP, server_mac)
 
-            self._install_flow_rules(event.connection, event.port, server_ip, server_mac, arp_req.protosrc, arp_req.hwsrc)
+            self._install_flow_rules(event.connection, server_ip, server_mac, client_ip, arp_req.hwsrc)
 
 
     def _handle_ip(self, packet):
