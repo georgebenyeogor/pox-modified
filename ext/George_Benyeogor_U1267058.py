@@ -8,24 +8,21 @@ import pox.lib.packet as pkt
 log = core.getLogger()
 
 
-VIRTUAL_IP = IPAddr("10.0.0.10")        # The "virtual" IP clients will ping
+VIRTUAL_IP = IPAddr("10.0.0.10")  # The "virtual" IP clients will ping
 SERVER_IPS = [IPAddr("10.0.0.5"),
-              IPAddr("10.0.0.6")]      # Real server IPs
+              IPAddr("10.0.0.6")] # Real server IPs
 SERVER_MACS = [EthAddr("00:00:00:00:00:05"),
                EthAddr("00:00:00:00:00:06")]  # Corresponding MACs
 
 class myApp (object):
-    """
-    Implements a simple round-robin load balancer with ARP interception.
-    """
-  
+
     def __init__(self):
       self.server_index = 0 # Start with the first server
       core.openflow.addListeners(self)
 
     def _handle_ConnectionUp(self, event):
         """
-        This is called when a switch connects to the controller.
+        Called when a switch connects to the controller.
         """
         log.info("Switch %s connected", event.connection.dpid)
 
@@ -46,7 +43,7 @@ class myApp (object):
             self._handle_arp(event, packet)
             return
 
-        # Check if IP (e.g., ICMP)
+        # Check if IP (ICMP)
         if packet.type == ethernet.IP_TYPE:
             log.info("Received ICMP packet")
             self._handle_ip(event, packet)
@@ -63,14 +60,12 @@ class myApp (object):
 
         # Check if ARP is a request for the VIRTUAL_IP
         if arp_req.opcode == arp.REQUEST and arp_req.protodst == VIRTUAL_IP:
-            # 1. Select a server in round-robin fashion
+            # Select a server in round-robin fashion
             server_ip = SERVER_IPS[self.server_index]
             server_mac = SERVER_MACS[self.server_index]
-
-            # 2. Bump the index for the next request
             self.server_index = (self.server_index + 1) % len(SERVER_IPS)
 
-            # 3. Craft an ARP reply
+            # Craft an ARP reply
             arp_reply = arp()
             arp_reply.opcode = arp.REPLY
             arp_reply.hwsrc = server_mac       
@@ -84,7 +79,7 @@ class myApp (object):
             ether.dst = packet.src
             ether.set_payload(arp_reply)
 
-            # 4. Send ARP reply out the same port the request came in
+            # Send ARP reply out the same port the request came in
             msg = of.ofp_packet_out()
             msg.data = ether.pack()
             msg.actions.append(of.ofp_action_output(port = event.port))
@@ -92,12 +87,13 @@ class myApp (object):
 
             self._install_flow_rules(event.connection, event.port, server_ip, server_mac, arp_req.protosrc, arp_req.hwsrc)
 
+
     def _handle_ip(self, event, packet):
         """
         Handle IP packets if they somehow arrive here without flows.
-        Typically, if you set up flows properly on ARP, this might not be used as much.
         """
         log.debug("Received IP packet %s", packet.find('ipv4'))
+
 
     def _install_flow_rules(self, connection, inport, server_ip, server_mac, client_ip, client_mac):
         """
@@ -116,7 +112,6 @@ class myApp (object):
 
         # Flow 2: Server to Client
         fm2 = of.ofp_flow_mod()
-
         fm2.match.dl_type = 0x0800
         fm2.match.nw_src = server_ip
         fm2.match.nw_dst = client_ip
@@ -124,5 +119,4 @@ class myApp (object):
         connection.send(fm2)
 
 def launch():
-
     core.registerNew(myApp)
